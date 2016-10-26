@@ -32,29 +32,16 @@ func (suite *EventHandlerTestSuite) SetupTest() {
 	suite.Mocker = m
 	suite.Prefix = "serfer"
 	suite.Handler = SerfEventHandler{
-		ServicePrefix:         suite.Prefix,
-		ReconcileOnJoin:       true,
-		ReconcileOnFail:       true,
-		ReconcileOnLeave:      true,
-		ReconcileOnUpdate:     true,
-		ReconcileOnReap:       true,
-		LeaderElectionHandler: m,
-		UserEvent:             m,
-		UnknownEventHandler:   m,
-		NodeJoined:            m,
-		NodeLeft:              m,
-		NodeFailed:            m,
-		NodeReaped:            m,
-		NodeUpdated:           m,
-		Reconciler:            m,
-		QueryHandler:          m,
-		IsLeader: func() bool {
-			return true
-		},
-		IsLeaderEvent: func(name string) bool {
-			return name == suite.Prefix+":new-leader"
-		},
-		Logger: &log.NullLogger{},
+		ServicePrefix:       suite.Prefix,
+		UserEvent:           m,
+		UnknownEventHandler: m,
+		NodeJoined:          m,
+		NodeLeft:            m,
+		NodeFailed:          m,
+		NodeReaped:          m,
+		NodeUpdated:         m,
+		QueryHandler:        m,
+		Logger:              &log.NullLogger{},
 	}
 
 	suite.Member = serf.Member{
@@ -86,7 +73,6 @@ func (suite *EventHandlerTestSuite) TestNodeJoined() {
 	suite.Mocker.On("Reconcile", suite.Member).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleMemberJoin", evt)
-	suite.Mocker.AssertCalled(suite.T(), "Reconcile", suite.Member)
 }
 
 // Test NodeLeave messages are dispatched properly
@@ -103,7 +89,6 @@ func (suite *EventHandlerTestSuite) TestNodeLeave() {
 	suite.Mocker.On("Reconcile", suite.Member).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleMemberLeave", evt)
-	suite.Mocker.AssertCalled(suite.T(), "Reconcile", suite.Member)
 }
 
 // Test NodeFailed messages are dispatched properly
@@ -120,7 +105,6 @@ func (suite *EventHandlerTestSuite) TestNodeFailed() {
 	suite.Mocker.On("Reconcile", suite.Member).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleMemberFailure", evt)
-	suite.Mocker.AssertCalled(suite.T(), "Reconcile", suite.Member)
 }
 
 // Test NodeReaped messages are dispatched properly
@@ -139,7 +123,6 @@ func (suite *EventHandlerTestSuite) TestNodeReaped() {
 	suite.Mocker.On("Reconcile", newMember).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleMemberReap", evt)
-	suite.Mocker.AssertCalled(suite.T(), "Reconcile", newMember)
 }
 
 // Test NodeUpdated messages are dispatched properly
@@ -156,7 +139,6 @@ func (suite *EventHandlerTestSuite) TestNodeUpdated() {
 	suite.Mocker.On("Reconcile", suite.Member).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleMemberUpdate", evt)
-	suite.Mocker.AssertCalled(suite.T(), "Reconcile", suite.Member)
 }
 
 // Test QueryEvent messages are dispatched properly
@@ -174,7 +156,6 @@ func (suite *EventHandlerTestSuite) TestQueryEvent() {
 	suite.Mocker.On("Reconcile", query).Return()
 	suite.Handler.HandleEvent(&query)
 	suite.Mocker.AssertCalled(suite.T(), "HandleQueryEvent", query)
-	suite.Mocker.AssertNotCalled(suite.T(), "Reconcile", query)
 }
 
 // Test nil messages are not dispatched properly
@@ -190,7 +171,6 @@ func (suite *EventHandlerTestSuite) TestNilEvent() {
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleUknownEvent")
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleUserEvent")
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleQueryEvent")
-	suite.Mocker.AssertNotCalled(suite.T(), "Reconcile")
 }
 
 // Test unknown messages are not dispatched properly
@@ -211,24 +191,6 @@ func (suite *EventHandlerTestSuite) TestUnknownEvent() {
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleUknownEvent")
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleUserEvent")
 	suite.Mocker.AssertNotCalled(suite.T(), "HandleQueryEvent")
-	suite.Mocker.AssertNotCalled(suite.T(), "Reconcile")
-}
-
-// Test leader election events are dispatched properly
-func (suite *EventHandlerTestSuite) TestUserEvent_LeaderElection() {
-
-	// Create Member Event
-	evt := serf.UserEvent{
-		LTime:    serf.LamportTime(0),
-		Name:     suite.Prefix + ":new-leader",
-		Payload:  make([]byte, 0),
-		Coalesce: false,
-	}
-
-	// Process event
-	suite.Mocker.On("HandleLeaderElection", evt).Return()
-	suite.Handler.HandleEvent(evt)
-	suite.Mocker.AssertCalled(suite.T(), "HandleLeaderElection", evt)
 }
 
 // Test unknown user events are dispatched properly
@@ -265,25 +227,4 @@ func (suite *EventHandlerTestSuite) TestUserEvent() {
 	suite.Mocker.On("HandleUserEvent", modified).Return()
 	suite.Handler.HandleEvent(evt)
 	suite.Mocker.AssertCalled(suite.T(), "HandleUserEvent", modified)
-}
-
-// Test non leader event
-func (suite *EventHandlerTestSuite) TestNonLeaderEvent() {
-	var called bool
-	suite.Handler.IsLeader = func() bool {
-		called = true
-		return false
-	}
-
-	// Create Member Event
-	evt := serf.MemberEvent{
-		serf.EventMemberUpdate,
-		[]serf.Member{suite.Member},
-	}
-
-	// Process event
-	suite.Mocker.On("HandleMemberUpdate", evt).Return()
-	suite.Handler.HandleEvent(evt)
-	suite.True(called, "IsLeader should have been called")
-	suite.Mocker.AssertNotCalled(suite.T(), "Reconcile")
 }

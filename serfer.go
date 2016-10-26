@@ -1,8 +1,9 @@
 package serfer
 
 import (
+	"golang.org/x/net/context"
+
 	"github.com/hashicorp/serf/serf"
-	tomb "gopkg.in/tomb.v2"
 )
 
 // Serfer processes Serf.Events and is meant to be ran in a goroutine.
@@ -12,40 +13,45 @@ type Serfer interface {
 	Start()
 
 	// Stop stops all event processing and blocks until finished.
-	Stop() error
+	Stop()
 }
 
 // NewSerfer returns a new Serfer implementation that uses the given channel and event handlers.
-func NewSerfer(c chan serf.Event, handler EventHandler) Serfer {
-	var t tomb.Tomb
-	return &serfer{handler, c, t}
+func NewSerfer(ctx context.Context, c chan serf.Event, handler EventHandler) Serfer {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	return &serfer{handler, c, ctx, cancel, done}
 }
 
 type serfer struct {
 	handler EventHandler
 	channel chan serf.Event
-	t       tomb.Tomb
+	ctx     context.Context
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 func (s *serfer) Start() {
-	s.t.Go(func() error {
+	go func() {
+
 		// Start event processing
 		for {
 			select {
 
 			// Handle context close
-			case <-s.t.Dying():
-				return nil
+			case <-s.ctx.Done():
+				close(s.done)
+				return
 
-			// Handle serf events
+				// Handle serf events
 			case evt := <-s.channel:
-				s.handler.HandleEvent(evt)
+				go s.handler.HandleEvent(evt)
 			}
 		}
-	})
+	}()
 }
 
-func (s *serfer) Stop() error {
-	s.t.Kill(nil)
-	return s.t.Wait()
+func (s *serfer) Stop() {
+	s.cancel()
+	<-s.done
 }

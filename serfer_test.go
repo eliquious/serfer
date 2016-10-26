@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/hashicorp/serf/serf"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestRunSerfer(t *testing.T) {
@@ -19,13 +20,10 @@ func TestRunSerfer(t *testing.T) {
 
 	// Create channel and serfer
 	ch := make(chan serf.Event, 1)
-	serfer := NewSerfer(ch, handler)
+	serfer := NewSerfer(context.Background(), ch, handler)
 
 	// Start serfer
 	serfer.Start()
-	// death.Go(func() error {
-	// 	return serfer.Run(ctx)
-	// })
 
 	// Send events
 	select {
@@ -36,7 +34,8 @@ func TestRunSerfer(t *testing.T) {
 	ch <- evt
 
 	// Verify stopped without error
-	assert.Nil(t, serfer.Stop(), "Error should be nil")
+	serfer.Stop()
+	// assert.Nil(t, , "Error should be nil")
 
 	// Validate event was prcoessed
 	handler.AssertCalled(t, "HandleEvent", evt)
